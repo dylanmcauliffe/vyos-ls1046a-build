@@ -93,7 +93,12 @@ jobs:
 
       - name: Setup kernel config and patches
         run: |
-          if [ "${{ github.event.inputs.build_mode }}" = "sdk-ask" ]; then
+          BUILD_MODE="${{ github.event.inputs.build_mode }}"
+          # Auto-detect: ask branch always uses sdk-ask mode
+          if [ "${{ github.ref_name }}" = "ask" ] && [ -z "$BUILD_MODE" -o "$BUILD_MODE" = "mainline" ]; then
+            BUILD_MODE="sdk-ask"
+          fi
+          if [ "$BUILD_MODE" = "sdk-ask" ]; then
             echo "### Build mode: SDK + ASK fast-path"
             bin/ci-setup-kernel-sdk.sh
           else
@@ -144,7 +149,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    if: github.ref_name == 'main' || github.ref_name == 'dev'
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.ref_name == 'ask'
     steps:
       - uses: actions/checkout@v6
       - name: Clone vyos-build repo
@@ -340,5 +345,51 @@ jobs:
           keep_latest: 5
           delete_tags: true
           delete_tag_pattern: ".*-dev$"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── ASK pre-release (ask branch) ──
+      - name: "ASK release: publish pre-release"
+        if: github.ref_name == 'ask'
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## ⚠️ ASK Build — Experimental
+
+            **Version:** `${{ needs.build_iso.outputs.build_version }}`
+            **Branch:** `ask`
+            **Kernel:** SDK DPAA1 + ASK fast-path hooks
+
+            This is an **experimental SDK+ASK build** with NXP SDK FMan drivers
+            and ASK conntrack fast-path. NOT for production use.
+
+            ### Install from VyOS
+            ```
+            add system image https://github.com/${{ github.repository }}/releases/download/${{ needs.build_iso.outputs.build_version }}-ask/${{ needs.build_iso.outputs.image_iso }}
+            ```
+
+            ### Test checklist
+            - [ ] Boots without kernel panic
+            - [ ] All 5 ethernet ports appear (eth0–eth4)
+            - [ ] SSH accessible
+            - [ ] SFP+ link up (if modules inserted)
+            - [ ] Fan control active
+            - [ ] ASK CDX module loads
+          tag_name: ${{ needs.build_iso.outputs.build_version }}-ask
+          prerelease: true
+          fail_on_unmatched_files: false
+          files: |
+            ${{ needs.build_iso.outputs.image_iso }}
+            ${{ needs.build_iso.outputs.image_iso }}.minisig
+            vyos-*-usb.img.zst
+            vyos-*-usb.img.zst.minisig
+
+      - name: "ASK release: clean old ask releases"
+        if: github.ref_name == 'ask'
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        with:
+          keep_latest: 3
+          delete_tags: true
+          delete_tag_pattern: ".*-ask$"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
