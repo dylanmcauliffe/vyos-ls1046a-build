@@ -26,6 +26,7 @@ for p in data/vyos-1x-*.patch; do
 done
 cp data/scripts/patch-mmcblk-default.py "$PATCH_STAGING/"
 cp data/scripts/patch-vpp-platform-bus.py "$PATCH_STAGING/"
+cp data/scripts/patch-image-compat.py "$PATCH_STAGING/"
 cp data/reftree.cache "$PATCH_STAGING/"
 
 cat > "$VYOS1X_BUILD/package.toml" <<'EOF'
@@ -46,6 +47,7 @@ pre_build_hook = """
   done
   python3 ../ls1046a-patches/patch-mmcblk-default.py
   python3 ../ls1046a-patches/patch-vpp-platform-bus.py
+  python3 ../ls1046a-patches/patch-image-compat.py
   echo "### VERIFY: VPP patches in source tree"
   grep -c 'fsl_dpa' src/conf_mode/vpp.py || echo "MISSING: fsl_dpa in vpp.py"
   grep -c 'namespace' data/templates/vpp/startup.conf.j2 || echo "MISSING: namespace in startup.conf.j2"
